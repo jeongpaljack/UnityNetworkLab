@@ -55,12 +55,41 @@ public class Gun : MonoBehaviour {
 
     // 발사 시도
     public void Fire() {
-
+        if(state == State.Ready && Time.time >= lastFireTime + timeBetFire)
+        {
+            lastFireTime = Time.time;
+            Shot();
+        }
     }
 
     // 실제 발사 처리
     private void Shot() {
-        
+        RaycastHit hit; // 충돌 정보 저장용 변수
+        Vector3 hitPosition = Vector3.zero; // 총알이 맞은 위치
+        if (Physics.Raycast(fireTransform.position, fireTransform.forward, out hit, fireDistance))
+        {
+            IDamageable target = hit.collider.GetComponent<IDamageable>();
+
+            if (target != null)
+            {
+                target.OnDamage(damage, hit.point, hit.normal);
+            }
+
+            hitPosition = hit.point;
+        }
+        else
+        {
+            hitPosition = fireTransform.position + fireTransform.forward * fireDistance;
+        }
+
+
+        StartCoroutine(ShotEffect(hitPosition));
+
+        magAmmo--;
+        if (magAmmo <= 0)
+        {
+            state = State.Empty;
+        }
     }
 
     // 발사 이펙트와 소리를 재생하고 총알 궤적을 그린다
@@ -86,7 +115,13 @@ public class Gun : MonoBehaviour {
 
     // 재장전 시도
     public bool Reload() {
-        return false;
+        if(state == State.Reloading || ammoRemain <= 0 || magAmmo >= magCapacity)
+        {
+            return false;
+        }
+
+        StartCoroutine(ReloadRoutine());
+        return true;
     }
 
     // 실제 재장전 처리를 진행
@@ -94,8 +129,19 @@ public class Gun : MonoBehaviour {
         // 현재 상태를 재장전 중 상태로 전환
         state = State.Reloading;
         
+        gunAudioPlayer.PlayOneShot(reloadClip); // 재장전 소리 재생
         // 재장전 소요 시간 만큼 처리를 쉬기
         yield return new WaitForSeconds(reloadTime);
+
+        int ammoToFill = magCapacity - magAmmo; // 채워야 할 탄약 수
+
+        if (ammoRemain < ammoToFill)
+        {
+            ammoToFill = ammoRemain;
+        }
+
+        magAmmo += ammoToFill; // 탄창 채우기
+        ammoRemain -= ammoToFill; // 남은 탄약 감소
 
         // 총의 현재 상태를 발사 준비된 상태로 변경
         state = State.Ready;
